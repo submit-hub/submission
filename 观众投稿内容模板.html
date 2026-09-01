@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>观众投稿 · 模板</title>
+<style>
+  /* ============================================================
+     观众投稿内容模板（增强版）
+     设计语言：简约 · 大方 · 编辑式留白
+     ----------------------------------------------------------
+     底部两个按钮：
+       · 「输入投稿内容」→ 弹窗填写标题与正文 → 自动分页渲染
+       · 「输出图片」     → 将所有投稿页（不含按钮）拼合导出 PNG
+     长文超过一页篇幅自动另起一页，每页独立成卡、构图平衡。
+     投稿回传：点「生成投稿」时自动写入 Google 表格（配置见脚本顶部 GFORM）。
+       ——写入走 Google 表单的公开入口，读取只发生在你自己的表格里，
+         读者看不到表单页面，也看不到任何其他人的投稿。
+     ============================================================ */
+
+  :root{
+    --ink:#1d1d1f; --ink-80:#333; --ink-48:#7a7a7a; --ink-32:#a1a1a6;
+    --canvas:#fff; --parchment:#f5f5f7; --hairline:#e0e0e0; --divider:#f0f0f0;
+    --accent:#0066cc; --accent-soft:rgba(0,102,204,.08);
+    --shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--parchment);color:var(--ink);
+    font-family:"SF Pro Text","PingFang SC","Helvetica Neue","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    font-size:17px;line-height:1.6;letter-spacing:-.01em;
+    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    padding:56px 20px 80px;
+  }
+
+  /* ---------- 整页容器 ---------- */
+  .sheet{max-width:680px;margin:0 auto}
+  .pages{display:flex;flex-direction:column;gap:28px}
+
+  /* ---------- 单页卡片 ---------- */
+  .page{
+    background:var(--canvas);border:1px solid var(--hairline);
+    border-radius:18px;box-shadow:var(--shadow);padding:52px 60px;
+  }
+  .page-meta{
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;
+    padding-bottom:22px;border-bottom:1px solid var(--divider);
+    font-size:14px;color:var(--ink-48);letter-spacing:0;
+  }
+  .tag{
+    display:inline-flex;align-items:center;height:24px;padding:0 12px;
+    background:var(--accent-soft);color:var(--accent);border-radius:9999px;
+    font-size:12px;font-weight:600;letter-spacing:.04em;white-space:nowrap;
+  }
+  .page-meta .sep{color:var(--ink-32);user-select:none}
+  .clk{font-variant-numeric:tabular-nums}
+  .who{margin-left:auto;color:var(--ink-80);font-weight:600}
+  .pno{color:var(--ink-32);font-variant-numeric:tabular-nums}
+
+  /* 续页（第2页起）用更轻的页眉，保留时间与作者，加页码 */
+  .page--cont .tag{background:transparent;color:var(--ink-48);padding:0;font-weight:600}
+
+  /* ---------- 正文 ---------- */
+  .page-content{padding:36px 0 8px;color:var(--ink);font-size:17px;line-height:1.82;letter-spacing:.01em}
+  .page-content h1,.page-content h2,.page-content h3{
+    font-family:"SF Pro Display","PingFang SC",system-ui,sans-serif;font-weight:600;
+    line-height:1.25;letter-spacing:-.02em;margin:0 0 .6em;
+  }
+  .page-content h1{font-size:30px}
+  .page-content h2{font-size:23px;margin-top:1.3em}
+  .page-content p{margin:0 0 1.05em}
+  .page-content p:last-child{margin-bottom:0}
+  /* 首页首段首字下沉
+     注意：这里不能用 ::first-letter 伪元素——html2canvas 不支持它，
+     导出图片时放大效果会丢失、却残留浮动留白，导致首字显得扁平怪异。
+     改用真实 <span class="dropcap"> 节点承载首字，浮动落在真实元素上，
+     浏览器与导出图片渲染完全一致。 */
+  .dropcap{
+    font-family:"SF Pro Display","PingFang SC",Georgia,"Songti SC",serif;
+    font-size:2.5em;font-weight:600;line-height:1;float:left;
+    margin:.06em .14em 0 0;color:var(--ink);
+  }
+
+  /* ---------- 页脚（仅末页） ---------- */
+  .page-foot{
+    margin-top:30px;padding-top:18px;border-top:1px solid var(--divider);
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:12px;color:var(--ink-48);
+  }
+  .page-foot .mailbox{font-weight:600;color:var(--ink-80)}
+  .page-foot .hint{color:var(--ink-32)}
+
+  /* ---------- 底部双按钮 ---------- */
+  .actions{display:flex;gap:14px;margin-top:32px}
+  .btn{
+    flex:1;height:50px;border:none;border-radius:9999px;font:inherit;
+    font-size:16px;font-weight:500;cursor:pointer;
+    transition:transform .12s ease,background .2s,box-shadow .2s;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:#0071e3}
+  .btn-secondary{background:var(--canvas);color:var(--accent);border:1px solid var(--accent)}
+  .btn-secondary:hover{background:var(--accent-soft)}
+  .btn:disabled{opacity:.5;cursor:default;transform:none}
+
+  /* ---------- 输入弹窗 ---------- */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal[hidden]{display:none}
+  .modal-panel{
+    background:var(--canvas);border-radius:18px;width:100%;max-width:560px;
+    padding:32px;box-shadow:0 24px 70px rgba(0,0,0,.25);
+    display:flex;flex-direction:column;gap:18px;max-height:88vh;overflow:auto;
+  }
+  .modal-title{font-size:20px;font-weight:600;letter-spacing:-.01em}
+  .field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink-48)}
+  .field input,.field textarea{
+    font:inherit;font-size:15px;color:var(--ink);border:1px solid var(--hairline);
+    border-radius:10px;padding:12px 14px;background:var(--parchment);resize:vertical;width:100%;
+  }
+  .field textarea{min-height:240px;line-height:1.7}
+  .field input:focus,.field textarea:focus{outline:none;border-color:var(--accent);background:#fff}
+  .modal-actions{display:flex;gap:12px;justify-content:flex-end}
+  .modal-actions .btn{flex:0 0 auto;min-width:128px;height:44px;font-size:15px}
+  .btn-ghost{background:transparent;color:var(--ink-48)}
+  .btn-ghost:hover{background:var(--parchment)}
+
+  /* ---------- 送达提示 ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(8px);
+    background:var(--ink);color:#fff;font-size:14px;letter-spacing:0;
+    padding:12px 22px;border-radius:9999px;box-shadow:0 10px 28px rgba(0,0,0,.18);
+    z-index:60;opacity:0;pointer-events:none;
+    transition:opacity .25s ease,transform .25s ease;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---------- 响应式 ---------- */
+  @media(max-width:640px){
+    body{padding:24px 14px 64px}
+    .page{padding:34px 24px;border-radius:14px}
+    .page-meta{font-size:13px;gap:8px 12px}
+    .page-content{padding:28px 0 6px;font-size:16px;line-height:1.78}
+    .page-content h1{font-size:25px}
+    .actions{margin-top:24px}
+    .btn{height:46px;font-size:15px}
+    .modal-panel{padding:24px}
+  }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div id="pages" class="pages"><!-- 投稿页由 JS 注入 --></div>
+
+    <!-- 底部双按钮（导出图片时不会被包含） -->
+    <div class="actions">
+      <button id="btnInput" class="btn btn-primary" type="button">输入投稿内容</button>
+      <button id="btnExport" class="btn btn-secondary" type="button">输出图片</button>
+    </div>
+  </div>
+
+  <!-- 输入弹窗 -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="输入投稿内容">
+      <h2 class="modal-title">输入投稿内容</h2>
+      <label class="field"><span>标题（可选）</span>
+        <input id="inTitle" type="text" placeholder="给这篇投稿起个标题" maxlength="40">
+      </label>
+      <label class="field"><span>正文</span>
+        <textarea id="inBody" placeholder="在此粘贴或撰写投稿正文…&#10;&#10;空行分段；篇幅较长会自动分页，每页另起一张。"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button id="btnCancel" class="btn btn-ghost" type="button">取消</button>
+        <button id="btnConfirm" class="btn btn-primary" type="button">生成投稿</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 送达提示 -->
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+  (function(){
+    "use strict";
+
+    /* ===== 配置 ===== */
+    var PAGE_MAX = 720;            // 单页正文区目标高度(px)，超出即分页
+    var WEEKDAYS = ["周日","周一","周二","周三","周四","周五","周六"];
+    var CITIES = ["北京","上海","广州","深圳","成都","杭州","武汉","西安","南京","重庆",
+      "天津","苏州","长沙","青岛","郑州","沈阳","大连","哈尔滨","济南","厦门",
+      "福州","昆明","贵阳","南昌","合肥","太原","石家庄","南宁","海口","兰州",
+      "银川","西宁","乌鲁木齐","拉萨","呼和浩特","宁波","无锡","佛山","东莞","珠海",
+      "中山","泉州","烟台","温州","徐州","唐山","洛阳","桂林","三亚","大同"];
+    var NAME_PREFIX=["清风","明月","山外","城南","北城","晚来","疏影","寒江","旧梦","浮生",
+      "长亭","远山","暮云","初雪","半夏","青衫","白衣","听雨","观潮","折柳",
+      "落花","归客","问渡","拾光","枕流","踏雪","听松","望川","执笔","听风"];
+    var NAME_SUFFIX=["客","人","旅者","行者","先生","姑娘","书生","游人","看客","过客",
+      "散人","闲人","舟","鹤","鹿","隐者","少年","墨客","樵者","渔叟"];
+
+    /* ============================================================
+       ★ 投稿回传配置：只需填下面这 6 行 ★
+       ----------------------------------------------------------
+       action  : Google 表单的 formResponse 地址
+       其余各项：对应字段的 entry ID；不需要的字段留空 "" 即可
+       填写方法见文件末尾说明 / 交付文档
+       ============================================================ */
+    var GFORM = {
+      enabled : true,      // 设为 false 则完全不回传，纯本地演示
+      action  : "https://docs.google.com/forms/d/e/把这里换成你的FORM_ID/formResponse",
+      fTitle  : "",        // 标题
+      fBody   : "",        // 正文（建议必填，这是你要存的核心内容）
+      fCity   : "",        // 随机城市
+      fAuthor : "",        // 随机网名
+      fTime   : ""         // 提交时间
+    };
+    var SUBMIT_MIN_INTERVAL = 15000;   // 同一浏览器最短提交间隔(毫秒)，防误触刷屏
+
+    /* ===== 当前状态 ===== */
+    var state = { title:"", body:"", city:"", author:"" };
+
+    /* ===== 工具 ===== */
+    function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+    function genName(){ return Math.random()<.7 ? pick(NAME_PREFIX)+pick(NAME_SUFFIX)
+                                                : pick(NAME_PREFIX)+(100+Math.floor(Math.random()*900)); }
+    function genCity(){ return pick(CITIES); }
+    function pad(n){ return n<10?"0"+n:""+n; }
+    function nowText(){
+      var d=new Date();
+      return d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日 "+WEEKDAYS[d.getDay()]+" "
+        +pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+    }
+    function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    /* 生成段落。dropcap=true 时把首个可见字符包进 <span class="dropcap">，
+       用真实节点而非 ::first-letter，保证导出图片同样生效。 */
+    function makePara(text,dropcap){
+      var p=document.createElement("p");
+      if(dropcap){
+        var idx=text.search(/\S/);
+        if(idx>=0){
+          var lead=text.slice(0,idx);
+          var first=text.charAt(idx);
+          var rest=text.slice(idx+1);
+          if(lead) p.appendChild(document.createTextNode(lead));
+          var dc=document.createElement("span");
+          dc.className="dropcap"; dc.textContent=first;
+          p.appendChild(dc);
+          var tail=document.createElement("span");
+          tail.innerHTML=escapeHtml(rest).replace(/\n/g,"<br>");
+          p.appendChild(tail);
+          return p;
+        }
+      }
+      p.innerHTML=escapeHtml(text).replace(/\n/g,"<br>");
+      return p;
+    }
+    function splitParagraphs(text){ return text.split(/\n{2,}/).map(function(s){return s.replace(/^\n+|\n+$/g,"");}).filter(function(s){return s.length>0;}); }
+    function splitSentences(text){
+      var out=[],buf="";
+      for(var i=0;i<text.length;i++){
+        var ch=text[i]; buf+=ch;
+        if("。！？!?…\n".indexOf(ch)>=0){ out.push(buf); buf=""; }
+      }
+      if(buf.trim()) out.push(buf);
+      return out;
+    }
+
+    /* ===== 实时时钟（更新所有 .clk） ===== */
+    function tick(){
+      var t=nowText();
+      var nodes=document.querySelectorAll(".clk");
+      for(var i=0;i<nodes.length;i++) nodes[i].textContent=t;
+    }
+    setInterval(tick,1000);
+
+    /* ===== 构建一页 DOM ===== */
+    function buildPage(index){
+      var art=document.createElement("article");
+      art.className="page"+(index===0?" page--first":" page--cont");
+
+      var meta=document.createElement("header"); meta.className="page-meta";
+      var tag=document.createElement("span"); tag.className="tag";
+      tag.textContent = index===0 ? "观众投稿" : "观众投稿 · 续";
+      meta.appendChild(tag);
+
+      var clk=document.createElement("time"); clk.className="clk"; clk.textContent=nowText(); meta.appendChild(clk);
+      var dot1=document.createElement("span"); dot1.className="sep"; dot1.textContent="·"; meta.appendChild(dot1);
+      if(index===0){
+        var city=document.createElement("span"); city.className="city"; city.textContent=state.city; meta.appendChild(city);
+      }
+      var who=document.createElement("span"); who.className="who";
+      who.innerHTML="来自 <b>"+escapeHtml(state.author)+"</b>"; meta.appendChild(who);
+      if(index>0){
+        var dot2=document.createElement("span"); dot2.className="sep"; dot2.textContent="·"; meta.appendChild(dot2);
+        var pno=document.createElement("span"); pno.className="pno"; pno.textContent="P"+(index+1); meta.appendChild(pno);
+      }
+      art.appendChild(meta);
+
+      var content=document.createElement("div"); content.className="page-content"; art.appendChild(content);
+      return {art:art, content:content};
+    }
+    function addFooter(art){
+      var f=document.createElement("footer"); f.className="page-foot";
+      f.innerHTML='<span class="mailbox">投稿信箱 · 来信即登</span><span class="hint">本页内容为观众投稿，不代表本站立场</span>';
+      art.appendChild(f);
+    }
+
+    /* ===== 分页渲染 ===== */
+    function renderPages(){
+      var root=document.getElementById("pages");
+      root.innerHTML="";
+      var pages=[];
+      function newPage(){ var p=buildPage(pages.length); root.appendChild(p.art); pages.push(p); return p; }
+      var cur=newPage();
+
+      if(state.title){
+        var h=document.createElement("h1"); h.textContent=state.title; cur.content.appendChild(h);
+      }
+      var paras=splitParagraphs(state.body);
+      if(!paras.length){ paras=["（暂无投稿内容，点击右下「输入投稿内容」开始撰写。）"]; }
+
+      var dcDone=false;   /* 首字下沉只出现一次，且只落在第 1 页的首段 */
+
+      for(var pi=0;pi<paras.length;pi++){
+        var para=paras[pi];
+        var wantDC=(!dcDone && cur===pages[0]);
+        var el=makePara(para,wantDC);
+        cur.content.appendChild(el);
+        if(cur.content.scrollHeight<=PAGE_MAX){ if(wantDC) dcDone=true; continue; }
+        /* 整段放不下 → 退回，按句拆分填页 */
+        cur.content.removeChild(el);
+        var sents=splitSentences(para);
+        if(sents.length<=1){ cur=newPage(); cur.content.appendChild(el); if(wantDC) dcDone=true; continue; }
+        var acc="", accEl=null, startIdx=0;
+        for(var i=0;i<sents.length;i++){
+          var tryAcc=acc+sents[i];
+          var dcHere=(!dcDone && cur===pages[0] && i===startIdx);
+          var tryEl=makePara(tryAcc,dcHere);
+          if(accEl) cur.content.replaceChild(tryEl,accEl); else cur.content.appendChild(tryEl);
+          if(cur.content.scrollHeight>PAGE_MAX){
+            if(i===startIdx){
+              /* 单句即超长 → 单独成页，接受溢出避免死循环 */
+              acc=tryAcc; accEl=tryEl; if(dcHere) dcDone=true; startIdx=i+1; continue;
+            }
+            var keep=sents.slice(startIdx,i).join("");
+            var keepEl=makePara(keep,(!dcDone && cur===pages[0]));
+            cur.content.replaceChild(keepEl,accEl);
+            if(!dcDone && cur===pages[0]) dcDone=true;
+            cur=newPage(); acc=""; accEl=null; startIdx=i; i--; /* 本句重投到新页 */
+          }else{ acc=tryAcc; accEl=tryEl; }
+        }
+      }
+      if(pages.length){ addFooter(pages[pages.length-1].art); }
+      tick();
+    }
+
+    /* ============================================================
+       投稿回传：写入 Google 表单 → 落到你自己的 Google 表格
+       ----------------------------------------------------------
+       安全模型：这是一个「只写」通道。
+         · 前端只有"往里写"的地址和字段 ID，没有任何能读取数据的钥匙；
+         · 表格在你自己的 Google 账号下，只有你能打开；
+         · 读者看不到表单页面，也拿不到任何其他人的投稿。
+       注意：Google 的 formResponse 不返回 CORS 头，因此用 opaque 请求
+       发送（能送达但读不到回执），失败时自动降级到隐藏 iframe 提交。
+       ============================================================ */
+    var LAST_SUBMIT_KEY="gz_last_submit_at";
+
+    function formConfigured(){
+      return /^https:\/\/docs\.google\.com\/forms\/d\/e\/[A-Za-z0-9_-]+\/formResponse$/.test(GFORM.action);
+    }
+    function withinRate(){
+      try{
+        var last=parseInt(localStorage.getItem(LAST_SUBMIT_KEY)||"0",10);
+        return !(Date.now()-last < SUBMIT_MIN_INTERVAL);
+      }catch(e){ return true; }
+    }
+    function markSubmitted(){ try{ localStorage.setItem(LAST_SUBMIT_KEY,String(Date.now())); }catch(e){} }
+
+    function payloadOf(){
+      var d={};
+      if(GFORM.fTitle)  d[GFORM.fTitle]  = state.title || "（无标题）";
+      if(GFORM.fBody)   d[GFORM.fBody]   = state.body;
+      if(GFORM.fCity)   d[GFORM.fCity]   = state.city;
+      if(GFORM.fAuthor) d[GFORM.fAuthor] = state.author;
+      if(GFORM.fTime)   d[GFORM.fTime]   = nowText();
+      return d;
+    }
+    function encodeBody(data){
+      var parts=[];
+      for(var k in data){ if(!Object.prototype.hasOwnProperty.call(data,k)) continue;
+        parts.push(encodeURIComponent(k)+"="+encodeURIComponent(data[k])); }
+      return parts.join("&");
+    }
+
+    /* 主路：fetch no-cors（urlencoded 属于简单请求，不触发预检） */
+    function fetchSubmit(data){
+      return fetch(GFORM.action,{
+        method:"POST", mode:"no-cors", credentials:"omit",
+        headers:{"Content-Type":"application/x-www-form-urlencoded"},
+        body:encodeBody(data)
+      }).then(function(){ return true; });
+    }
+    /* 降级：隐藏 iframe 提交，跨域表单提交不受 CORS 限制 */
+    function iframeSubmit(data){
+      return new Promise(function(resolve,reject){
+        try{
+          var ifr=document.createElement("iframe");
+          ifr.name="gform_target_"+Date.now();
+          ifr.style.display="none";
+          var f=document.createElement("form");
+          f.action=GFORM.action; f.method="POST"; f.target=ifr.name; f.style.display="none";
+          for(var k in data){ if(!Object.prototype.hasOwnProperty.call(data,k)) continue;
+            var i=document.createElement("input");
+            i.type="hidden"; i.name=k; i.value=data[k]; f.appendChild(i); }
+          document.body.appendChild(ifr); document.body.appendChild(f);
+          f.submit();
+          setTimeout(function(){
+            try{ document.body.removeChild(f); document.body.removeChild(ifr); }catch(e){}
+            resolve(true);
+          },1500);
+        }catch(e){ reject(e); }
+      });
+    }
+    function submitToSheet(){
+      var data=payloadOf();
+      if(!Object.keys(data).length) return Promise.resolve(false);
+      return fetchSubmit(data).catch(function(){ return iframeSubmit(data); })
+        .then(function(ok){ if(ok) markSubmitted(); return ok; })
+        .catch(function(){ return false; });
+    }
+
+    /* 提示条 */
+    var toastEl=document.getElementById("toast"), toastTimer=null;
+    function toast(msg,ms){
+      if(!toastEl) return;
+      toastEl.textContent=msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer=setTimeout(function(){ toastEl.classList.remove("show"); }, ms||2600);
+    }
+
+    /* 对外入口：生成投稿后调用 */
+    function deliver(){
+      if(!GFORM.enabled || !formConfigured()) return;   // 未启用/未配置 → 静默，不影响本地使用
+      if(!withinRate()){ toast("提交过于频繁，请稍候再试"); return; }
+      submitToSheet().then(function(ok){
+        toast(ok ? "投稿已送达编辑部" : "送达失败，内容仍保留在本地");
+      });
+    }
+
+    /* ===== 弹窗交互 ===== */
+    var modal=document.getElementById("modal");
+    var inTitle=document.getElementById("inTitle");
+    var inBody=document.getElementById("inBody");
+    function openInput(){
+      inTitle.value=state.title; inBody.value=state.body;
+      modal.hidden=false; setTimeout(function(){ inBody.focus(); },30);
+    }
+    function closeInput(){ modal.hidden=true; }
+    function confirmInput(){
+      var t=inTitle.value.trim(); var b=inBody.value.trim();
+      if(!b){ inBody.focus(); return; }
+      /* 每次投稿重新生成随机城市与网名 */
+      state.title=t; state.body=b; state.city=genCity(); state.author=genName();
+      closeInput(); renderPages();
+      deliver();   /* 回传到 Google 表格（配置见脚本顶部 GFORM，未配置则自动跳过） */
+    }
+    document.getElementById("btnInput").addEventListener("click",openInput);
+    document.getElementById("btnCancel").addEventListener("click",closeInput);
+    document.getElementById("btnConfirm").addEventListener("click",confirmInput);
+    modal.addEventListener("click",function(e){ if(e.target===modal) closeInput(); });
+    document.addEventListener("keydown",function(e){
+      if(e.key==="Escape" && !modal.hidden) closeInput();
+      if((e.metaKey||e.ctrlKey)&&e.key==="Enter" && !modal.hidden) confirmInput();
+    });
+
+    /* ===== 导出图片（不含按钮） ===== */
+    var btnExport=document.getElementById("btnExport");
+    btnExport.addEventListener("click",function(){
+      if(typeof html2canvas==="undefined"){ alert("图片库未加载，请检查网络后重试。"); return; }
+      var pages=document.querySelectorAll(".page");
+      if(!pages.length) return;
+      var original=btnExport.textContent;
+      btnExport.disabled=true; btnExport.textContent="正在生成图片…";
+
+      var scale=2, gap=28;
+      var canvasList=[];
+      var chain=Promise.resolve();
+      pages.forEach(function(pg){
+        chain=chain.then(function(){
+          return html2canvas(pg,{scale:scale,backgroundColor:"#ffffff",useCORS:true,logging:false})
+            .then(function(c){ canvasList.push(c); });
+        });
+      });
+      chain.then(function(){
+        var W=0; canvasList.forEach(function(c){ if(c.width>W)W=c.width; });
+        var totalH=0; canvasList.forEach(function(c){ totalH+=c.height; });
+        var H=totalH + gap*(canvasList.length-1);
+        var out=document.createElement("canvas"); out.width=W; out.height=H;
+        var ctx=out.getContext("2d");
+        ctx.fillStyle="#f5f5f7"; ctx.fillRect(0,0,W,H);
+        var y=0;
+        for(var k=0;k<canvasList.length;k++){
+          ctx.drawImage(canvasList[k],0,y);
+          y+=canvasList[k].height+gap;
+        }
+        var a=document.createElement("a");
+        a.download="观众投稿_"+Date.now()+".png";
+        a.href=out.toDataURL("image/png");
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      }).catch(function(err){
+        alert("导出失败："+err.message);
+      }).then(function(){
+        btnExport.disabled=false; btnExport.textContent=original;
+      });
+    });
+
+    /* ===== 初始内容 ===== */
+    state.title="";
+    state.body="把这里换成你的投稿正文就好。这段文字只是占位，演示一下阅读节奏与留白——第一段会自动呈现首字下沉，给整篇一个编辑式的开篇感。\n\n你可以照常分段、加标题、列要点。下面用一个二级标题切分章节：\n\n关于投稿格式\n正文不需要任何格式也能读，但如果你愿意，可以用二级标题切分章节，用引用突出金句。比如：\n\n“好的投稿，像一封写给陌生人的长信——克制、真诚、有余味。”\n\n替换完成后，顶部会自动显示当前日期时间、一座随机城市，以及一个随机生成的网名。每次刷新页面、或每次重新输入投稿，城市与网名都会换一个。篇幅较长时会自动另起一页，每页独立成卡，构图平衡。";
+    state.city=genCity(); state.author=genName();
+    renderPages();
+  })();
+  </script>
+</body>
+</html>
