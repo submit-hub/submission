@@ -5,18 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>观众投稿 · 模板</title>
 <style>
-  /* ============================================================
-     观众投稿内容模板（增强版）
-     设计语言：简约 · 大方 · 编辑式留白
-     ----------------------------------------------------------
-     底部两个按钮：
-       · 「输入投稿内容」→ 弹窗填写标题与正文 → 自动分页渲染
-       · 「输出图片」     → 将所有投稿页（不含按钮）拼合导出 PNG
-     长文超过一页篇幅自动另起一页，每页独立成卡、构图平衡。
-     投稿回传：点「生成投稿」时自动写入 Google 表格（配置见脚本顶部 GFORM）。
-       ——写入走 Google 表单的公开入口，读取只发生在你自己的表格里，
-         读者看不到表单页面，也看不到任何其他人的投稿。
-     ============================================================ */
 
   :root{
     --ink:#1d1d1f; --ink-80:#333; --ink-48:#7a7a7a; --ink-32:#a1a1a6;
@@ -71,11 +59,7 @@
   .page-content h2{font-size:23px;margin-top:1.3em}
   .page-content p{margin:0 0 1.05em}
   .page-content p:last-child{margin-bottom:0}
-  /* 首页首段首字下沉
-     注意：这里不能用 ::first-letter 伪元素——html2canvas 不支持它，
-     导出图片时放大效果会丢失、却残留浮动留白，导致首字显得扁平怪异。
-     改用真实 <span class="dropcap"> 节点承载首字，浮动落在真实元素上，
-     浏览器与导出图片渲染完全一致。 */
+
   .dropcap{
     font-family:"SF Pro Display","PingFang SC",Georgia,"Songti SC",serif;
     font-size:2.5em;font-weight:600;line-height:1;float:left;
@@ -200,26 +184,17 @@
     var NAME_SUFFIX=["客","人","旅者","行者","先生","姑娘","书生","游人","看客","过客",
       "散人","闲人","舟","鹤","鹿","隐者","少年","墨客","樵者","渔叟"];
 
-    /* ============================================================
-       ★ 投稿回传配置：只需填下面这 6 行 ★
-       ----------------------------------------------------------
-       action  : Google 表单的 formResponse 地址
-       其余各项：对应字段的 entry ID；不需要的字段留空 "" 即可
-       填写方法见文件末尾说明 / 交付文档
-       ============================================================ */
     var GFORM = {
-      enabled : true,      // 设为 false 则完全不回传，纯本地演示
-      /* 必须是 .../formResponse 结尾，不能是 viewform（那是展示页，提交无效）。
-         末尾的 ?usp=dialog 之类查询串会被自动去掉，留着也不影响。 */
+      enabled : true,      
       action  : "https://docs.google.com/forms/d/e/1FAIpQLSf2xcO6cnvN-HQRo9YmHMOv9Vg7l7NJU7jjSS4OgX_CwW9-dQ/formResponse",
-      fTitle  : "entry.214759360",   // 标题
-      fBody   : "entry.1038420087",  // 正文（建议必填，这是你要存的核心内容）
-      fCity   : "entry.418652522",   // 随机城市
-      fAuthor : "entry.1968110964",  // 随机网名
-      fTime   : "entry.322167359"    // 提交时间
+      fTitle  : "entry.214759360",   
+      fBody   : "entry.1038420087",  
+      fCity   : "entry.418652522",   
+      fAuthor : "entry.1968110964",  
+      fTime   : "entry.322167359"   
     };
-    var SUBMIT_MIN_INTERVAL = 15000;   // 同一浏览器最短提交间隔(毫秒)，防误触刷屏
-    var DBG = /[?&]debug=1/.test(location.search);   // 网址加 ?debug=1 打开控制台日志，便于排查
+    var SUBMIT_MIN_INTERVAL = 15000;   
+    var DBG = /[?&]debug=1/.test(location.search);   
 
     /* ===== 当前状态 ===== */
     var state = { title:"", body:"", city:"", author:"" };
@@ -236,8 +211,7 @@
         +pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
     }
     function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-    /* 生成段落。dropcap=true 时把首个可见字符包进 <span class="dropcap">，
-       用真实节点而非 ::first-letter，保证导出图片同样生效。 */
+
     function makePara(text,dropcap){
       var p=document.createElement("p");
       if(dropcap){
@@ -359,16 +333,6 @@
       tick();
     }
 
-    /* ============================================================
-       投稿回传：写入 Google 表单 → 落到你自己的 Google 表格
-       ----------------------------------------------------------
-       安全模型：这是一个「只写」通道。
-         · 前端只有"往里写"的地址和字段 ID，没有任何能读取数据的钥匙；
-         · 表格在你自己的 Google 账号下，只有你能打开；
-         · 读者看不到表单页面，也拿不到任何其他人的投稿。
-       注意：Google 的 formResponse 不返回 CORS 头，因此用 opaque 请求
-       发送（能送达但读不到回执），失败时自动降级到隐藏 iframe 提交。
-       ============================================================ */
     var LAST_SUBMIT_KEY="gz_last_submit_at";
 
     function formConfigured(){
@@ -523,7 +487,7 @@
 
     /* ===== 初始内容 ===== */
     state.title="";
-    state.body="把这里换成你的投稿正文就好。这段文字只是占位，演示一下阅读节奏与留白——第一段会自动呈现首字下沉，给整篇一个编辑式的开篇感。\n\n你可以照常分段、加标题、列要点。下面用一个二级标题切分章节：\n\n关于投稿格式\n正文不需要任何格式也能读，但如果你愿意，可以用二级标题切分章节，用引用突出金句。比如：\n\n“好的投稿，像一封写给陌生人的长信——克制、真诚、有余味。”\n\n替换完成后，顶部会自动显示当前日期时间、一座随机城市，以及一个随机生成的网名。每次刷新页面、或每次重新输入投稿，城市与网名都会换一个。篇幅较长时会自动另起一页，每页独立成卡，构图平衡。";
+    state.body="好的投稿，像一封写给陌生人的长信——克制、真诚、有余味。";
     state.city=genCity(); state.author=genName();
     renderPages();
   })();
