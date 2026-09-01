@@ -57,8 +57,10 @@
   }
   .page-content h1{font-size:30px}
   .page-content h2{font-size:23px;margin-top:1.3em}
-  .page-content p{margin:0 0 1.05em}
+  .page-content p{margin:0 0 1.05em;text-indent:2em}
   .page-content p:last-child{margin-bottom:0}
+  /* 首段（首字下沉）与跨页续段不缩进 */
+  .page-content p.flush{text-indent:0}
 
   .dropcap{
     font-family:"SF Pro Display","PingFang SC",Georgia,"Songti SC",serif;
@@ -196,8 +198,35 @@
     var SUBMIT_MIN_INTERVAL = 15000;   
     var DBG = /[?&]debug=1/.test(location.search);   
 
+    /* ===== 初始引导文案：每次打开随机取一组（标题 + 引导词） ===== */
+    var INTROS = [
+      {
+        title:"把心事，交给一个会接住它的人",
+        body:"我们总有些话，说给熟人太沉，咽回心里太烫。\n\n这里没有围观，只有素未谋面的读者，像深夜邻座的路人——\n\n他们不评判，只倾听；不追问，只懂得。\n\n你的文字不必完美，但要诚实。\n\n投过来吧，有人在等那束光。"
+      },
+      {
+        title:"你的故事，值得被更多人“看见”",
+        body:"写作从来不是孤岛，而是一块扔进湖面的石头——\n\n涟漪会抵达你想象不到的岸边。\n\n别让那些独特的视角、隐秘的感动、尖锐的思考，\n\n只停留在备忘录或深夜的朋友圈。\n\n把它投给我们，让每一个字都找到它的读者，\n\n让沉默的回响，变成真实的回响。"
+      },
+      {
+        title:"留一封手信，给未知的知音",
+        body:"好的投稿，不必喧哗，不必讨好。\n\n它像你在旧书页里夹下的一片银杏，\n\n某天被另一个人偶然翻见，彼此无言，却都懂了那个秋天。\n\n把你想说的，留在这里。\n\n我们保证，每一封都会被郑重地拆开。"
+      }
+    ];
+    /* 随机取一组；?intro=1/2/3 可指定某一组，便于预览与截图 */
+    function pickIntro(){
+      var m=/[?&]intro=([1-9])/.exec(location.search);
+      if(m){ var i=parseInt(m[1],10)-1; if(i<INTROS.length) return INTROS[i]; }
+      var last=null;
+      try{ last=parseInt(sessionStorage.getItem("gz_intro_idx"),10); }catch(e){}
+      var idx=Math.floor(Math.random()*INTROS.length);
+      if(INTROS.length>1 && idx===last) idx=(idx+1+Math.floor(Math.random()*(INTROS.length-1)))%INTROS.length;
+      try{ sessionStorage.setItem("gz_intro_idx",String(idx)); }catch(e){}
+      return INTROS[idx];
+    }
+
     /* ===== 当前状态 ===== */
-    var state = { title:"", body:"", city:"", author:"" };
+    var state = { title:"", body:"", city:"", author:"", isTemplate:true };
 
     /* ===== 工具 ===== */
     function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
@@ -212,7 +241,8 @@
     }
     function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-    function makePara(text,dropcap){
+    /* noIndent：首段（首字下沉）或跨页续段，均不缩进 */
+    function makePara(text,dropcap,noIndent){
       var p=document.createElement("p");
       if(dropcap){
         var idx=text.search(/\S/);
@@ -227,9 +257,11 @@
           var tail=document.createElement("span");
           tail.innerHTML=escapeHtml(rest).replace(/\n/g,"<br>");
           p.appendChild(tail);
+          p.className="flush";
           return p;
         }
       }
+      if(noIndent) p.className="flush";
       p.innerHTML=escapeHtml(text).replace(/\n/g,"<br>");
       return p;
     }
@@ -260,18 +292,26 @@
       var meta=document.createElement("header"); meta.className="page-meta";
       var tag=document.createElement("span"); tag.className="tag";
       tag.textContent = index===0 ? "观众投稿" : "观众投稿 · 续";
-      meta.appendChild(tag);
 
-      var clk=document.createElement("time"); clk.className="clk"; clk.textContent=nowText(); meta.appendChild(clk);
-      var dot1=document.createElement("span"); dot1.className="sep"; dot1.textContent="·"; meta.appendChild(dot1);
-      if(index===0){
-        var city=document.createElement("span"); city.className="city"; city.textContent=state.city; meta.appendChild(city);
+      var clk=document.createElement("time"); clk.className="clk"; clk.textContent=nowText();
+
+      /* 首页模板（未投稿状态）不展示地点与投稿人 */
+      var items=[tag, clk];
+      if(!state.isTemplate){
+        if(index===0){
+          var city=document.createElement("span"); city.className="city"; city.textContent=state.city; items.push(city);
+        }
+        var who=document.createElement("span"); who.className="who";
+        who.innerHTML="来自 <b>"+escapeHtml(state.author)+"</b>"; items.push(who);
       }
-      var who=document.createElement("span"); who.className="who";
-      who.innerHTML="来自 <b>"+escapeHtml(state.author)+"</b>"; meta.appendChild(who);
       if(index>0){
-        var dot2=document.createElement("span"); dot2.className="sep"; dot2.textContent="·"; meta.appendChild(dot2);
-        var pno=document.createElement("span"); pno.className="pno"; pno.textContent="P"+(index+1); meta.appendChild(pno);
+        var pno=document.createElement("span"); pno.className="pno"; pno.textContent="P"+(index+1); items.push(pno);
+      }
+      for(var mi=0; mi<items.length; mi++){
+        if(mi){
+          var sep=document.createElement("span"); sep.className="sep"; sep.textContent="·"; meta.appendChild(sep);
+        }
+        meta.appendChild(items[mi]);
       }
       art.appendChild(meta);
 
@@ -314,7 +354,7 @@
         for(var i=0;i<sents.length;i++){
           var tryAcc=acc+sents[i];
           var dcHere=(!dcDone && cur===pages[0] && i===startIdx);
-          var tryEl=makePara(tryAcc,dcHere);
+          var tryEl=makePara(tryAcc,dcHere,startIdx>0);
           if(accEl) cur.content.replaceChild(tryEl,accEl); else cur.content.appendChild(tryEl);
           if(cur.content.scrollHeight>PAGE_MAX){
             if(i===startIdx){
@@ -322,7 +362,7 @@
               acc=tryAcc; accEl=tryEl; if(dcHere) dcDone=true; startIdx=i+1; continue;
             }
             var keep=sents.slice(startIdx,i).join("");
-            var keepEl=makePara(keep,(!dcDone && cur===pages[0]));
+            var keepEl=makePara(keep,(!dcDone && cur===pages[0]),startIdx>0);
             cur.content.replaceChild(keepEl,accEl);
             if(!dcDone && cur===pages[0]) dcDone=true;
             cur=newPage(); acc=""; accEl=null; startIdx=i; i--; /* 本句重投到新页 */
@@ -423,15 +463,17 @@
     var inTitle=document.getElementById("inTitle");
     var inBody=document.getElementById("inBody");
     function openInput(){
-      inTitle.value=state.title; inBody.value=state.body;
+      /* 每次打开都是一次新的投稿：标题与正文一律置空，不继承上次内容 */
+      inTitle.value=""; inBody.value="";
       modal.hidden=false; setTimeout(function(){ inBody.focus(); },30);
     }
     function closeInput(){ modal.hidden=true; }
     function confirmInput(){
       var t=inTitle.value.trim(); var b=inBody.value.trim();
       if(!b){ inBody.focus(); return; }
-      /* 每次投稿重新生成随机城市与网名 */
+      /* 每次投稿重新生成随机城市与网名；提交后转为正式投稿态，页眉恢复显示地点与投稿人 */
       state.title=t; state.body=b; state.city=genCity(); state.author=genName();
+      state.isTemplate=false;
       closeInput(); renderPages();
       deliver();   /* 回传到 Google 表格（配置见脚本顶部 GFORM，未配置则自动跳过） */
     }
@@ -485,10 +527,13 @@
       });
     });
 
-    /* ===== 初始内容 ===== */
-    state.title="欢迎投稿";
-    state.body="注\n\n好的投稿，像一封写给陌生人的长信——克制、真诚、有余味。";
+    /* ===== 初始内容：随机一组引导文案 ===== */
+    var intro=pickIntro();
+    state.title=intro.title;
+    state.body=intro.body;
     state.city=genCity(); state.author=genName();
+    state.isTemplate=true;      /* 首页模板：页眉不显示地点与投稿人 */
+    if(intro.title) document.title=intro.title+" · 观众投稿";
     renderPages();
   })();
   </script>
